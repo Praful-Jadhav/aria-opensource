@@ -1,0 +1,204 @@
+// ARIA Platform — Phase 1 MVP Schema
+// Engine: PostgreSQL
+// Models: User, AuthSession, OtpRequest, ToolConnection, OAuthToken, ApiKeyConnection, RoutingLog, SystemConfig
+
+generator client {
+  provider = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  // Dev: "sqlite" | Prod: switch to "postgresql" before deploying
+  provider = "postgresql"
+}
+
+// ─── USERS ───────────────────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  phone         String?  @unique
+  name          String?
+  avatarUrl     String?
+  status        UserStatus @default(ACTIVE)
+  isAdmin       Boolean  @default(false)
+  role          String   @default("user")
+  plan          String   @default("free")
+  isActive      Boolean  @default(true)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  lastActiveAt  DateTime @default(now())
+
+  // Relations
+  authSessions      AuthSession[]
+  toolConnections   ToolConnection[]
+  apiKeyConnections ApiKeyConnection[]
+  routingLogs       RoutingLog[]
+  vaultEntries      VaultEntry[]
+
+  @@map("users")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+// ─── AUTH SESSIONS ──────────────────────────────────────────────────────────
+
+model AuthSession {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String   @unique
+  deviceInfo  String?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+
+  @@index([userId])
+  @@map("auth_sessions")
+}
+
+// ─── OTP REQUESTS ──────────────────────────────────────────────────────────
+
+model OtpRequest {
+  id          String   @id @default(cuid())
+  identifier  String   // email or phone
+  type        String   // "email" | "phone"
+  otpHash     String
+  attempts    Int      @default(0)
+  used        Boolean  @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([identifier, used])
+  @@map("otp_requests")
+}
+
+// ─── TOOL CONNECTIONS ───────────────────────────────────────────────────────
+
+model ToolConnection {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  toolName        String   // "google_workspace" | "github"
+  connectionType  String   // "oauth" | "api_key" | "token"
+  scopes          String?  // comma-separated scopes granted
+  status          String   @default("active") // "active" | "expired" | "revoked"
+  lastSync        DateTime?
+  expiresAt       DateTime?
+  createdAt       DateTime @default(now())
+
+  oauthToken      OAuthToken?
+
+  providerUserId  String?
+
+  @@unique([userId, toolName])
+  @@unique([toolName, providerUserId])
+  @@map("tool_connections")
+}
+
+// ─── OAUTH TOKENS ──────────────────────────────────────────────────────────
+
+model OAuthToken {
+  id                String   @id @default(cuid())
+  connectionId      String   @unique
+  connection        ToolConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  encryptedAccess   String
+  encryptedRefresh  String?
+  iv                String
+  authTag           String
+  ivRefresh         String?
+  authTagRefresh    String?
+  tokenType         String   @default("Bearer")
+  scope             String?
+  expiresAt         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("oauth_tokens")
+}
+
+// ─── API KEY CONNECTIONS ────────────────────────────────────────────────────
+
+model ApiKeyConnection {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  toolName      String   // "openai" | "gemini" | "claude" | custom
+  encryptedKey  String
+  iv            String
+  authTag       String
+  keyHint       String   // last 4 chars
+  baseUrl       String?
+  status        String   @default("active") // "active" | "invalid" | "revoked"
+  lastUsedAt    DateTime?
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, toolName])
+  @@index([userId])
+  @@map("api_key_connections")
+}
+
+// ─── ROUTING LOGS ──────────────────────────────────────────────────────────
+
+model RoutingLog {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  toolName        String
+  actionType      String   // "api_call" | "oauth_refresh" | "connection_test"
+  requestTimestamp DateTime @default(now())
+  responseStatus  Int?     // HTTP status code
+  durationMs      Int?
+  errorMessage    String?
+  createdAt       DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("routing_logs")
+}
+
+// ─── SYSTEM CONFIG ────────────────────────────────────────────────────────
+
+model SystemConfig {
+  key         String @id
+  value       String
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_config")
+}
+
+// ─── VAULT ENTRIES ─────────────────────────────────────────────────────────
+
+model VaultEntry {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Sealed data
+  ciphertext  String    // AES-256-GCM encrypted value
+  iv          String    // Initialization vector
+  authTag     String    // GCM authentication tag
+  version     Int       @default(1)
+  sealedAt    String
+  hint        String?   // Last 4 chars for UI display only
+
+  // Classification
+  label       String    // Human name: "GitHub Personal Token"
+  type        String    // api_key | oauth_token | refresh_token | webhook_secret
+  metadata    String?   // JSON: non-sensitive metadata
+
+  // Lifecycle
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isRevoked   Boolean   @default(false)
+  revokedAt   DateTime?
+
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, isRevoked])
+  @@map("vault_entries")
+}
+

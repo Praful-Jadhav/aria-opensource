@@ -1,0 +1,28 @@
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.db-journal
+prisma/migrations/
+
+# Build outputs
+.next/
+out/
+dist/
+
+# Dependencies
+node_modules/
+
+# System
+.DS_Store
+Thumbs.db
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*

@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        env:
+          JWT_SECRET: ci-test-secret-64-chars-long-placeholder-value-here-1234567890ab
+          ENCRYPTION_KEY: ci-test-encryption-64-chars-long-placeholder-value-here-12345678
+          DATABASE_URL: file:./ci-test.db
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+        run: |
+          npx prisma db push
+          npm run build
