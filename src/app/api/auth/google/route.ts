@@ -3,9 +3,8 @@ import { config } from '@/config';
 
 export async function GET(req: NextRequest) {
   if (!config.oauth.googleConfigured) {
-    return NextResponse.json(
-      { success: false, error: { code: 'NOT_CONFIGURED', message: 'Google OAuth not configured' } },
-      { status: 503 }
+    return NextResponse.redirect(
+      new URL('/login?error=oauth_not_configured', req.url)
     );
   }
 
