@@ -1,28 +1,29 @@
-# Secrets
+# ARIA .gitignore — credentials never leave this machine. Ever.
 .env
+.env.*
 .env.local
 .env.*.local
-
-# Database
-*.db
-*.db-journal
-prisma/migrations/
-
-# Build outputs
+*.env
+*.pem
+*.key
+*.p12
+secrets.json
+credentials.json
+service-account*.json
+.secrets/
 .next/
 out/
-dist/
-
-# Dependencies
 node_modules/
-
-# System
+npm-debug.log*
+*.log
+*.db
+*.sqlite
+prisma/dev.db
+.vercel/
 .DS_Store
 Thumbs.db
-
-# TypeScript cache
-*.tsbuildinfo
-
-# Logs
-*.log
-npm-debug.log*
+.vscode/settings.json
+.idea/
+scan-*.txt
+audit-*.txt
+codebase-map.txt
